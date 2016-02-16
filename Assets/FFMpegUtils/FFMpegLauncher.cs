@@ -6,14 +6,36 @@ using System.Diagnostics;
 
 namespace FFMpegUtils
 {
+    public class Disposable : IDisposable
+    {
+        public bool IsDisposed
+        {
+            get;
+            private set;
+        }
+        public void Dispose()
+        {
+            IsDisposed = true;    
+        }
+    }
+
     public static class RecursiveReader
     {
         public delegate void OnReadFunc(Byte[] bytes, int count);
 
         public delegate void OnCompleteFunc();
 
-        public static void BeginRead(this Stream s, Byte[] buffer, OnReadFunc onRead, OnCompleteFunc onComplete=null)
+        public static IDisposable BeginRead(this Stream s, Byte[] buffer, OnReadFunc onRead, OnCompleteFunc onComplete = null)
         {
+            var disposable = new Disposable();
+            s.BeginRead(buffer, onRead, onComplete, () => disposable.IsDisposed);
+            return disposable;
+        }
+
+        static void BeginRead(this Stream s, Byte[] buffer, OnReadFunc onRead, OnCompleteFunc onComplete, Func<bool> IsDisposed)
+        {
+            if (IsDisposed()) return;
+
             AsyncCallback callback = ar => {
                 var ss = ar.AsyncState as Stream;
                 var readCount = ss.EndRead(ar);
@@ -28,7 +50,7 @@ namespace FFMpegUtils
 
                 onRead(buffer, readCount);
 
-                BeginRead(ss, buffer, onRead, onComplete);
+                BeginRead(ss, buffer, onRead, onComplete, IsDisposed);
             };
             s.BeginRead(buffer, 0, buffer.Length, callback, s);
         }
