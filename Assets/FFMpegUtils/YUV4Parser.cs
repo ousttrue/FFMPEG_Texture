@@ -11,18 +11,19 @@ namespace FFMpegUtils
         public static T Get<T>(this ArraySegment<T> s, int index)
         {
             if (index >= s.Count) throw new IndexOutOfRangeException();
-            return s.Array[s.Offset+index];
+            return s.Array[s.Offset + index];
         }
 
         public static IEnumerable<T> ToE<T>(this ArraySegment<T> s)
         {
             return s.Array.Skip(s.Offset).Take(s.Count);
         }
-    }       
+    }
 
     public enum YUVFormat
     {
         YUV420,
+        YUV444
     }
 
     [Serializable]
@@ -48,7 +49,76 @@ namespace FFMpegUtils
         {
             get
             {
-                return Width * Height * 3 / 2;
+                if (Format == YUVFormat.YUV444)
+                {
+                    return Width * Height * 3;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+
+        public int YBytesLength
+        {
+            get
+            {
+                return Width * Height;
+            }
+        }
+
+        public int YBytesOffset
+        {
+            get
+            {
+                return 0;
+            }
+        }
+
+        public int UBytesLength
+        {
+            get
+            {
+                if (Format == YUVFormat.YUV444)
+                {
+                    return YBytesLength;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+
+        public int UBytesOffset
+        {
+            get
+            {
+                return YBytesLength;
+            }
+        }
+
+        public int VBytesLength
+        {
+            get
+            {
+                if (Format == YUVFormat.YUV444)
+                {
+                    return YBytesLength;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+
+        public int VBytesOffset
+        {
+            get
+            {
+                return UBytesOffset + UBytesLength;
             }
         }
 
@@ -57,7 +127,7 @@ namespace FFMpegUtils
             int width = 0;
             int height = 0;
             var format = default(YUVFormat);
-            foreach (var value in header.Split())
+            foreach (var value in header.Split(' '))
             {
                 switch (value.FirstOrDefault())
                 {
@@ -70,9 +140,13 @@ namespace FFMpegUtils
                         break;
 
                     case 'C':
-                        if (value.StartsWith("C420"))
+                        if (value.Equals("C420"))
                         {
                             format = YUVFormat.YUV420;
+                        }
+                        else if (value.Equals("C444"))
+                        {
+                            format = YUVFormat.YUV444;
                         }
                         break;
                 }
@@ -152,12 +226,16 @@ namespace FFMpegUtils
     public class YUVFrame
     {
         public int FrameNumber;
-        public Byte[] Bytes;
+        public Byte[] YBytes;
+        public Byte[] UBytes;
+        public Byte[] VBytes;
 
         public YUVFrame()
         {
             FrameNumber = -1;
-            Bytes = null;
+            YBytes = null;
+            UBytes = null;
+            VBytes = null;
         }
     }
 
@@ -177,18 +255,32 @@ namespace FFMpegUtils
         {
             lock (m_current)
             {
-                if (m_frame.FrameNumber!=m_current.FrameNumber)
+                if (m_frame.FrameNumber != m_current.FrameNumber)
                 {
                     // copy
                     m_frame.FrameNumber = m_current.FrameNumber;
-                    if(m_frame.Bytes== null)
+                    if (m_frame.YBytes == null || m_frame.YBytes.Length != Header.YBytesLength)
                     {
-                        m_frame.Bytes = m_current.Body.ToArray();
+                        m_frame.YBytes = new Byte[Header.YBytesLength];
                     }
-                    else
+                    if (m_frame.UBytes == null || m_frame.UBytes.Length != Header.UBytesLength)
                     {
-                        Array.Copy(m_current.Body, m_frame.Bytes, m_current.Body.Length);
+                        m_frame.UBytes = new Byte[Header.UBytesLength];
+                        // for testing set all bytes to zero
+                        //for (int i = 0; i < m_frame.UBytes.Length; i++)
+                        //    m_frame.UBytes[i] = 0;
                     }
+                    if (m_frame.VBytes == null || m_frame.VBytes.Length != Header.VBytesLength)
+                    {
+                        m_frame.VBytes = new Byte[Header.VBytesLength];
+                        // for testing set all bytes to zero
+                        //for (int i = 0; i < m_frame.UBytes.Length; i++)
+                        //    m_frame.UBytes[i] = 0;
+                    }
+
+                    Array.Copy(m_current.Body, Header.YBytesOffset, m_frame.YBytes, 0, Header.YBytesLength);
+                    Array.Copy(m_current.Body, Header.UBytesOffset, m_frame.UBytes, 0, Header.UBytesLength);
+                    Array.Copy(m_current.Body, Header.VBytesOffset, m_frame.VBytes, 0, Header.VBytesLength);
                 }
             }
             return m_frame;
@@ -217,14 +309,14 @@ namespace FFMpegUtils
             }
             else
             {
-                 PushBody(bytes);
+                PushBody(bytes);
             }
         }
 
         public int m_frameNumber;
 
         bool PushBody(ArraySegment<Byte> bytes)
-        { 
+        {
             bool hasNewFrame = false;
 
             var i = 0;

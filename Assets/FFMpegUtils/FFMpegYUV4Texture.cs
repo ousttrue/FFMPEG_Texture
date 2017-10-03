@@ -43,6 +43,8 @@ namespace FFMpegUtils
 
         [SerializeField]
         Texture2D Texture;
+        Texture2D UTexture;
+        Texture2D VTexture;
 
         FFMpegLauncher m_ffmpeg;
 
@@ -59,7 +61,8 @@ namespace FFMpegUtils
 
             // launch
             var exec = Path.Combine(Environment.GetEnvironmentVariable(KEY), EXE);
-            m_ffmpeg = FFMpegLauncher.Launch(exec, "-i \"{0}\" -f yuv4mpegpipe -", Source);
+            m_ffmpeg = FFMpegLauncher.Launch(exec, Source);
+            
             if (m_ffmpeg == null)
             {
                 Debug.LogWarning("fail to launch ffmpeg");
@@ -81,19 +84,27 @@ namespace FFMpegUtils
 
             if (Texture == null)
             {
-                // create texture
+                // create textures
                 if (m_yuvReader.Header != null)
                 {
-                    Texture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height * 3 / 2, TextureFormat.Alpha8, false);
+                    Texture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
                     quad.material.mainTexture = Texture;
+                    UTexture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
+                    quad.material.SetTexture("_UTex", UTexture);
+                    VTexture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
+                    quad.material.SetTexture("_VTex", VTexture);
                 }
             }
             else { 
                 var frame = m_yuvReader.GetFrame();
                 if (frame.FrameNumber != m_lastYUVFrame)
                 {
-                    Texture.LoadRawTextureData(frame.Bytes);
+                    Texture.LoadRawTextureData(frame.YBytes);
                     Texture.Apply();
+                    UTexture.LoadRawTextureData(frame.UBytes);
+                    UTexture.Apply();
+                    VTexture.LoadRawTextureData(frame.VBytes);
+                    VTexture.Apply();
                 }
             }
         }

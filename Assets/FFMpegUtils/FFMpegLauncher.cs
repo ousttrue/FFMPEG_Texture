@@ -81,7 +81,7 @@ namespace FFMpegUtils
             m_process=System.Diagnostics.Process.Start(startInfo);
         }
 
-        public static FFMpegLauncher Launch(String exec, String argFmt, params String[] args)
+        public static FFMpegLauncher Launch(String exec, String Source)
         {
             var file = new FileInfo(exec);
             if (!file.Exists)
@@ -89,7 +89,7 @@ namespace FFMpegUtils
                 return null;
             }
 
-            var startInfo = new ProcessStartInfo(file.FullName, String.Format("-i \"{0}\" -f yuv4mpegpipe -", args))
+            var startInfo = new ProcessStartInfo(file.FullName, String.Format("-i \"{0}\" -f yuv4mpegpipe -pix_fmt yuv444p -", Source))
             {
                 CreateNoWindow = true,
                 RedirectStandardError = true,
