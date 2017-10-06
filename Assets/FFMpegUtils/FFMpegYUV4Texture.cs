@@ -14,6 +14,10 @@ namespace FFMpegUtils
         [SerializeField]
         Renderer quad;
 
+        Material material;
+
+        // If the source is specified in the inspector, OnEnable() will call Initialize() to 
+        // start playback
         [SerializeField]
         string Source;
 
@@ -55,7 +59,26 @@ namespace FFMpegUtils
         IDisposable m_stdErrDisposable;
         int m_lastYUVFrame = -1;
 
+        // Initialize the material early so it can be immediately accessed 
+        void Awake()
+        {
+            material = new Material(Shader.Find("Unlit/YUV4"));
+            material.name = "FFMPEGMaterial";
+        }
+
+        // If Source is specified in the Inspector (and is non-zero) then Initialize() is called.
         void OnEnable()
+        {
+            if (Source != null && Source.Length > 0)
+            {
+                Initialize(Source);
+            }
+        }
+
+        // Creates a YUVReader and FFMpegLauncher to start playback.
+        // If Source is specified in the Inspector, OnEnable will call Initialize and playback will
+        // start immediately. Otherwise it can be called manually to start playback on command.
+        public void Initialize(string Source)
         {
             m_yuvReader = new YUVReader();
 
@@ -73,6 +96,12 @@ namespace FFMpegUtils
             m_stdErrDisposable = m_ffmpeg.StdErr.BeginRead(new Byte[1024], (b, c) => OnRead(m_error, b, c));
         }
 
+        // Allow the Material to be accessed so it can be assigned to geometry at runtime
+        public Material GetMaterial()
+        {
+            return material;
+        }
+
         void Update()
         {
             var error = Dequeue(m_error);
@@ -85,17 +114,23 @@ namespace FFMpegUtils
             if (Texture == null)
             {
                 // create textures
-                if (m_yuvReader.Header != null)
+                if (m_yuvReader != null && m_yuvReader.Header != null)
                 {
                     Texture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
-                    quad.material.mainTexture = Texture;
+                    material.mainTexture = Texture;
                     UTexture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
-                    quad.material.SetTexture("_UTex", UTexture);
+                    material.SetTexture("_UTex", UTexture);
                     VTexture = new Texture2D(m_yuvReader.Header.Width, m_yuvReader.Header.Height, TextureFormat.Alpha8, false);
-                    quad.material.SetTexture("_VTex", VTexture);
+                    material.SetTexture("_VTex", VTexture);
+
+                    if (quad != null)
+                    {
+                        quad.material = material;
+                    }
                 }
             }
-            else { 
+            else
+            { 
                 var frame = m_yuvReader.GetFrame();
                 if (frame.FrameNumber != m_lastYUVFrame)
                 {
