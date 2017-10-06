@@ -253,6 +253,11 @@ namespace FFMpegUtils
         YUVFrame m_frame = new YUVFrame();
         public YUVFrame GetFrame()
         {
+            if (m_current == null)
+            {
+                return m_frame;
+            }
+
             lock (m_current)
             {
                 if (m_frame.FrameNumber != m_current.FrameNumber)
